@@ -1,6 +1,6 @@
 # mito-morphometrics
 
-A Python toolkit for batch processing and statistical analysis of mitochondrial morphology data from [Nellie](https://github.com/aeleftherios/nellie) segmentation outputs.
+A Python toolkit for batch processing and statistical analysis of mitochondrial morphology data from [Nellie](https://github.com/aelefebv/nellie) segmentation outputs.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
