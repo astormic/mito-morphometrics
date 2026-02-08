@@ -140,10 +140,11 @@ python scripts/compare_replicates.py \
 If you use this tool in your research, please cite:
 
 **Nellie:**
-> [Nellie citation - check their repository for the most current citation]
+> Lefebvre, A.E.Y.T., Sturm, G., Lin, TY. et al. Nellie: automated organelle segmentation, tracking and hierarchical feature extraction in 2D/3D live-cell microscopy. Nat Methods 22, 751–763 (2025). https://doi.org/10.1038/s41592-025-02612-7
 
 **This tool:**
 > Rahmani. A., (2026). mito-morphometrics: Batch analysis toolkit for mitochondrial morphology. GitHub: https://github.com/astormic/mito-morphometrics
+> Preprint is coming soon!
 
 ## License
 
