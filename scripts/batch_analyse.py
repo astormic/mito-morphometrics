@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Batch Mitochondrial Morphology Analyzer
+Batch Mitochondrial Morphology Analyser
 Processes Nellie features_organelles.csv files to calculate cell-level metrics.
 
-Author: [Your Name]
+Author: Amir Rahmani
 License: MIT
 """
 
@@ -19,8 +19,6 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-
-# ---------------- FILE PICKER ----------------
 def pick_paths_if_needed(args) -> Tuple[str, str]:
     """Open GUI dialogs to select input and output directories."""
     root = tk.Tk()
@@ -44,8 +42,6 @@ def pick_paths_if_needed(args) -> Tuple[str, str]:
     root.destroy()
     return in_dir, out_dir
 
-
-# ---------------- FIND CSV FILES ----------------
 def find_csv_files(in_dir: str, recursive: bool = False) -> List[str]:
     """
     Find all CSV files in the input directory.
@@ -65,7 +61,6 @@ def find_csv_files(in_dir: str, recursive: bool = False) -> List[str]:
     return [str(f) for f in csv_files]
 
 
-# ---------------- ANALYSIS ----------------
 def analyze_cell(csv_path: str) -> pd.DataFrame:
     """
     Analyze mitochondrial morphology from Nellie output CSV.
@@ -81,7 +76,6 @@ def analyze_cell(csv_path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(csv_path)
 
-    # ---- EXACT Nellie column names (no guessing) ----
     AREA_COL = "organelle_area_raw"
     MAJOR_COL = "organelle_axis_length_maj_raw"
     MINOR_COL = "organelle_axis_length_min_raw"
@@ -96,13 +90,11 @@ def analyze_cell(csv_path: str) -> pd.DataFrame:
             f"Available columns are:\n{list(df.columns)}"
         )
 
-    # Convert to numeric
     for c in required:
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
     df = df.dropna(subset=[AREA_COL, MAJOR_COL, MINOR_COL])
 
-    # ---- per-mitochondrion arrays ----
     area = df[AREA_COL].values
     length_maj = df[MAJOR_COL].values
     length_min = df[MINOR_COL].values
@@ -111,25 +103,21 @@ def analyze_cell(csv_path: str) -> pd.DataFrame:
 
     n_mito = len(area)
 
-    # ---- size metrics ----
     total_area = np.sum(area)
     mean_area = np.mean(area)
     median_area = np.median(area)
     sd_area = np.std(area, ddof=1) if n_mito > 1 else np.nan
 
-    # ---- length metrics ----
     mean_length = np.mean(length_maj)
     max_length = np.max(length_maj)
     sd_length = np.std(length_maj, ddof=1) if n_mito > 1 else np.nan
 
-    # ---- shape metrics ----
     mean_solidity = np.mean(solidity)
     mean_extent = np.mean(extent)
 
     aspect_ratio = length_maj / length_min
     mean_aspect_ratio = np.mean(aspect_ratio)
 
-    # ---- derived / composite metrics ----
     fragmentation_index = n_mito / total_area if total_area > 0 else np.nan
     network_dominance_index = max_length / mean_length if mean_length > 0 else np.nan
     shape_heterogeneity_index = sd_length / mean_length if mean_length > 0 else np.nan
@@ -157,7 +145,6 @@ def analyze_cell(csv_path: str) -> pd.DataFrame:
     return out
 
 
-# ---------------- BATCH PROCESSING ----------------
 def batch_process(in_dir: str, out_dir: str, recursive: bool = False):
     """
     Process all CSV files in input directory.
@@ -214,7 +201,6 @@ def batch_process(in_dir: str, out_dir: str, recursive: bool = False):
     print(f"{'='*60}")
 
 
-# ---------------- CLI ----------------
 def parse_args():
     """Parse command line arguments."""
     ap = argparse.ArgumentParser(
