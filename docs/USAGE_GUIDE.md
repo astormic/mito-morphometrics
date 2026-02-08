@@ -4,7 +4,7 @@
 
 ### Step 1: Prepare Your Data
 
-After running Nellie on your microscopy images, you should have `features_organelles.csv` files. Organise them like this:
+After running Nellie on your cell images, you should have `features_organelles.csv` files. Organise them like this:
 
 ```
 project/
