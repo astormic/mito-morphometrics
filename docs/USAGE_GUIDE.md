@@ -153,7 +153,7 @@ If you encounter issues:
 - Ensure proper background subtraction in Nellie
 - Document microscope settings and acquisition parameters
 
-### Data Organization
+### Data Organisation
 - Use clear, descriptive filenames
 - Keep raw data separate from processed data
 - Document experimental conditions in a spreadsheet
