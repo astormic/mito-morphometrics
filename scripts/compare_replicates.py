@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Statistical Comparison of Mitochondrial Morphology Replicates
+Statistical Comparison of Mitochondrial Morphology Replicates/Species
 Compares two sets of cell-level metrics with appropriate statistical tests.
 
-Author: [Your Name]
+Author: Amir Rahmani
 License: MIT
 """
 
@@ -116,7 +116,6 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
                            metric_labels: dict, output_prefix: str):
     """Create bar plot visualizations with statistical annotations."""
     
-    # Comprehensive plot with all metrics
     n_metrics = len(metrics)
     n_cols = 3
     n_rows = int(np.ceil(n_metrics / n_cols))
@@ -183,7 +182,6 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
         ax.spines['right'].set_visible(False)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
     
-    # Remove empty subplots
     for idx in range(n_metrics, len(axes)):
         fig.delaxes(axes[idx])
     
@@ -192,7 +190,6 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
     plt.savefig(f'{output_prefix}_all_metrics.svg', format='svg', bbox_inches='tight')
     plt.close()
     
-    # Key metrics plot
     key_metrics = [
         'n_mitochondria',
         'mean_mito_area_raw',
@@ -222,7 +219,6 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
         bars = ax.bar(x_pos, means, yerr=sems, capsize=8, 
                        color=colors, alpha=0.8, edgecolor='black', linewidth=2)
         
-        # Individual points
         np.random.seed(42)
         x1_jitter = np.random.normal(0, 0.05, size=len(data1))
         x2_jitter = np.random.normal(1, 0.05, size=len(data2))
@@ -232,7 +228,6 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
         ax.scatter(x2_jitter, data2, alpha=0.5, s=50, color='darkred', 
                    zorder=3, edgecolors='black', linewidth=0.5)
         
-        # Significance
         y_max = max(means[0] + sems[0], means[1] + sems[1])
         y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
         bracket_height = y_max + 0.12 * y_range
@@ -291,11 +286,9 @@ Example:
     
     args = parser.parse_args()
     
-    # Create output directory if needed
     out_dir = Path(args.out).parent
     out_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load data
     print("Loading replicates...")
     rep1, rep2, combined = load_replicates(args.rep1, args.rep2)
     
@@ -303,7 +296,6 @@ Example:
     print(f"Replicate 2: n={len(rep2)} cells")
     print(f"Total: n={len(combined)} cells\n")
     
-    # Define metrics
     metrics = [
         'n_mitochondria',
         'total_mito_area_raw',
@@ -336,16 +328,13 @@ Example:
         'tubularity_score': 'Tubularity Score'
     }
     
-    # Perform statistical tests
     print("Performing statistical tests...")
     results_df = perform_statistical_tests(rep1, rep2, metrics)
     
-    # Save results
     results_path = f"{args.out}_statistics.csv"
     results_df.to_csv(results_path, index=False)
     print(f"✓ Statistical results saved: {results_path}\n")
     
-    # Print summary
     print("="*100)
     print("STATISTICAL COMPARISON SUMMARY")
     print("="*100)
