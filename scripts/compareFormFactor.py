@@ -4,7 +4,7 @@
 Compare Form Factor
 ==========================================
 Statistical comparison of mitochondrial form factor and morphology metrics
-between two experimental replicates.
+between two or three experimental replicates.
 
 Author: Amir Rahmani
 License: MIT
@@ -28,6 +28,20 @@ except ImportError:
     print("Please use --rep1, --rep2, and --out command line arguments instead.\n")
 
 
+METRIC_LABELS = {
+    'organelle_area_raw_count': 'Number of Mitochondria per Cell',
+    'organelle_area_raw_mean': 'Mean Mitochondrial Area',
+    'organelle_area_raw_std': 'SD of Mitochondrial Area',
+    'form_factor_mean': 'Mean Form Factor',
+    'form_factor_std': 'SD of Form Factor',
+    'form_factor_median': 'Median Form Factor',
+    'aspect_ratio_calc_mean': 'Mean Aspect Ratio',
+    'aspect_ratio_calc_std': 'SD of Aspect Ratio',
+    'circularity_mean': 'Mean Circularity',
+    'circularity_std': 'SD of Circularity'
+}
+
+
 def pick_files_if_needed(args):
     """
     Open GUI dialogs to select replicate files and output location if not provided via CLI.
@@ -39,10 +53,8 @@ def pick_files_if_needed(args):
 
     Returns:
     --------
-    rep1_path : str
-        Path to replicate 1 CSV file
-    rep2_path : str
-        Path to replicate 2 CSV file
+    rep_paths : list[str]
+        Paths to replicate CSV files
     out_path : str
         Output prefix path
     """
@@ -55,6 +67,8 @@ def pick_files_if_needed(args):
     root = tk.Tk()
     root.withdraw()
 
+    rep_paths = []
+
     rep1_path = args.rep1 or filedialog.askopenfilename(
         title="Select Replicate 1 CSV file",
         filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
@@ -62,6 +76,7 @@ def pick_files_if_needed(args):
     if not rep1_path:
         messagebox.showerror("Missing file", "No replicate 1 file selected.")
         raise SystemExit(1)
+    rep_paths.append(rep1_path)
 
     rep2_path = args.rep2 or filedialog.askopenfilename(
         title="Select Replicate 2 CSV file",
@@ -70,6 +85,24 @@ def pick_files_if_needed(args):
     if not rep2_path:
         messagebox.showerror("Missing file", "No replicate 2 file selected.")
         raise SystemExit(1)
+    rep_paths.append(rep2_path)
+
+    rep3_path = args.rep3
+    if not rep3_path:
+        add_third = messagebox.askyesno(
+            "Third replicate",
+            "Do you want to select a third replicate file?"
+        )
+        if add_third:
+            rep3_path = filedialog.askopenfilename(
+                title="Select Replicate 3 CSV file",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            if not rep3_path:
+                messagebox.showerror("Missing file", "No replicate 3 file selected.")
+                raise SystemExit(1)
+    if rep3_path:
+        rep_paths.append(rep3_path)
 
     if args.out:
         out_path = args.out
@@ -85,34 +118,33 @@ def pick_files_if_needed(args):
 
     root.update()
     root.destroy()
-    return rep1_path, rep2_path, out_path
+    return rep_paths, out_path
 
 
-def load_replicates(rep1_path: str, rep2_path: str) -> tuple:
+def load_replicates(rep_paths: list[str]) -> tuple:
     """Load and label replicate data."""
-    rep1 = pd.read_csv(rep1_path)
-    rep2 = pd.read_csv(rep2_path)
+    replicates = []
+    for idx, path in enumerate(rep_paths, start=1):
+        rep = pd.read_csv(path)
+        rep['replicate'] = f'Replicate {idx}'
+        replicates.append(rep)
 
-    rep1['replicate'] = 'Replicate 1'
-    rep2['replicate'] = 'Replicate 2'
+    combined = pd.concat(replicates, ignore_index=True)
 
-    combined = pd.concat([rep1, rep2], ignore_index=True)
-
-    return rep1, rep2, combined
+    return replicates, combined
 
 
-def perform_statistical_tests(rep1: pd.DataFrame, rep2: pd.DataFrame,
+def perform_statistical_tests(replicates: list[pd.DataFrame],
                               metrics: list) -> pd.DataFrame:
     """
     Perform statistical tests on each metric.
 
     Uses Shapiro-Wilk test to assess normality, then:
-    - Welch's t-test if both groups are normally distributed
-    - Mann-Whitney U test otherwise
+    - Welch's t-test or Mann-Whitney U for two groups
+    - One-way ANOVA or Kruskal-Wallis for three groups
 
     Args:
-        rep1: Replicate 1 DataFrame
-        rep2: Replicate 2 DataFrame
+        replicates: List of replicate DataFrames
         metrics: List of metric column names to test
 
     Returns:
@@ -120,37 +152,41 @@ def perform_statistical_tests(rep1: pd.DataFrame, rep2: pd.DataFrame,
     """
     results = []
 
-    metric_labels = {
-        'organelle_area_raw_count': 'Number of Mitochondria per Cell',
-        'organelle_area_raw_mean': 'Mean Mitochondrial Area',
-        'organelle_area_raw_std': 'SD of Mitochondrial Area',
-        'form_factor_mean': 'Mean Form Factor',
-        'form_factor_std': 'SD of Form Factor',
-        'form_factor_median': 'Median Form Factor',
-        'aspect_ratio_calc_mean': 'Mean Aspect Ratio',
-        'aspect_ratio_calc_std': 'SD of Aspect Ratio',
-        'circularity_mean': 'Mean Circularity',
-        'circularity_std': 'SD of Circularity'
-    }
-
     for metric in metrics:
-        data1 = rep1[metric].dropna()
-        data2 = rep2[metric].dropna()
+        data_by_rep = [rep[metric].dropna() for rep in replicates]
 
-        mean1, sem1 = data1.mean(), data1.sem()
-        mean2, sem2 = data2.mean(), data2.sem()
+        means = [data.mean() for data in data_by_rep]
+        sems = [data.sem() for data in data_by_rep]
+        ns = [len(data) for data in data_by_rep]
 
-        _, p_norm1 = stats.shapiro(data1) if len(data1) >= 3 else (None, None)
-        _, p_norm2 = stats.shapiro(data2) if len(data2) >= 3 else (None, None)
+        normality_p = [
+            stats.shapiro(data)[1] if len(data) >= 3 else None
+            for data in data_by_rep
+        ]
+        all_normal = all(p is not None and p > 0.05 for p in normality_p)
 
-        if p_norm1 and p_norm2 and p_norm1 > 0.05 and p_norm2 > 0.05:
-            stat, p_value = stats.ttest_ind(data1, data2, equal_var=False)
-            test_used = "Welch's t-test"
+        if any(n < 2 for n in ns):
+            test_used = "Insufficient data"
+            p_value = np.nan
+        elif len(replicates) == 2:
+            data1, data2 = data_by_rep
+            if all_normal:
+                _, p_value = stats.ttest_ind(data1, data2, equal_var=False)
+                test_used = "Welch's t-test"
+            else:
+                _, p_value = stats.mannwhitneyu(data1, data2, alternative='two-sided')
+                test_used = "Mann-Whitney U"
         else:
-            stat, p_value = stats.mannwhitneyu(data1, data2, alternative='two-sided')
-            test_used = "Mann-Whitney U"
+            if all_normal:
+                _, p_value = stats.f_oneway(*data_by_rep)
+                test_used = "One-way ANOVA"
+            else:
+                _, p_value = stats.kruskal(*data_by_rep)
+                test_used = "Kruskal-Wallis"
 
-        if p_value < 0.001:
+        if pd.isna(p_value):
+            sig = 'na'
+        elif p_value < 0.001:
             sig = '***'
         elif p_value < 0.01:
             sig = '**'
@@ -159,26 +195,25 @@ def perform_statistical_tests(rep1: pd.DataFrame, rep2: pd.DataFrame,
         else:
             sig = 'ns'
 
-        results.append({
-            'Metric': metric_labels.get(metric, metric),
-            'Rep1_mean': mean1,
-            'Rep1_SEM': sem1,
-            'Rep1_n': len(data1),
-            'Rep2_mean': mean2,
-            'Rep2_SEM': sem2,
-            'Rep2_n': len(data2),
+        row = {
+            'Metric': METRIC_LABELS.get(metric, metric),
             'Test': test_used,
             'p_value': p_value,
             'Significance': sig
-        })
+        }
+        for idx, (mean, sem, n) in enumerate(zip(means, sems, ns), start=1):
+            row[f'Rep{idx}_mean'] = mean
+            row[f'Rep{idx}_SEM'] = sem
+            row[f'Rep{idx}_n'] = n
+        results.append(row)
 
     return pd.DataFrame(results)
 
 
-def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
-                            results_df: pd.DataFrame, metrics: list,
+def create_comparison_plots(replicates: list[pd.DataFrame],
+                            metrics: list,
                             metric_labels: dict, output_prefix: str):
-    """Create bar plot visualizations with statistical annotations."""
+    """Create boxplot visualizations for all and key metrics."""
 
     n_metrics = len(metrics)
     n_cols = 3
@@ -187,54 +222,35 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 4 * n_rows))
     axes = axes.flatten() if n_rows > 1 else [axes] if n_cols == 1 else axes
 
-    colors = ['#3498db', '#e74c3c']  # Blue for Rep1, Red for Rep2
+    n_reps = len(replicates)
+    colors = list(plt.get_cmap("Set2").colors[:n_reps])
 
     for idx, metric in enumerate(metrics):
         ax = axes[idx]
 
-        data1 = rep1[metric].dropna()
-        data2 = rep2[metric].dropna()
+        data_by_rep = [rep[metric].dropna() for rep in replicates]
 
-        means = [data1.mean(), data2.mean()]
-        sems = [data1.sem(), data2.sem()]
-
-        row = results_df[results_df['Metric'] == metric_labels[metric]].iloc[0]
-        p_val = row['p_value']
-        sig = row['Significance']
-
-        x_pos = [0, 1]
-        bars = ax.bar(x_pos, means, yerr=sems, capsize=5,
-                      color=colors, alpha=0.7, edgecolor='black', linewidth=1.5)
+        x_pos = np.arange(1, n_reps + 1)
+        bp = ax.boxplot(
+            data_by_rep,
+            positions=x_pos,
+            widths=0.6,
+            patch_artist=True,
+            showfliers=False
+        )
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.6)
+            patch.set_edgecolor('black')
 
         np.random.seed(42)
-        x1_jitter = np.random.normal(0, 0.04, size=len(data1))
-        x2_jitter = np.random.normal(1, 0.04, size=len(data2))
-
-        ax.scatter(x1_jitter, data1, alpha=0.4, s=30, color='black', zorder=3)
-        ax.scatter(x2_jitter, data2, alpha=0.4, s=30, color='black', zorder=3)
-
-        y_max = max(means[0] + sems[0], means[1] + sems[1])
-        y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
-        bracket_height = y_max + 0.1 * y_range
-
-        if sig != 'ns':
-            ax.plot([0, 0, 1, 1],
-                    [bracket_height, bracket_height + 0.02 * y_range,
-                     bracket_height + 0.02 * y_range, bracket_height],
-                    'k-', linewidth=1.5)
-            ax.text(0.5, bracket_height + 0.04 * y_range, sig,
-                    ha='center', va='bottom', fontsize=12, fontweight='bold')
-
-        if p_val < 0.001:
-            p_text = 'p < 0.001'
-        else:
-            p_text = f'p = {p_val:.3f}'
-
-        ax.text(0.5, -0.15, p_text, ha='center', va='top',
-                transform=ax.transAxes, fontsize=9, style='italic')
+        for rep_idx, data in enumerate(data_by_rep):
+            x_jitter = np.random.normal(rep_idx + 1, 0.06, size=len(data))
+            ax.scatter(x_jitter, data, alpha=0.4, s=25, color='black', zorder=3)
 
         ax.set_xticks(x_pos)
-        ax.set_xticklabels([f'Rep 1\n(n={len(data1)})', f'Rep 2\n(n={len(data2)})'])
+        ax.set_xticklabels([f'Rep {idx + 1}\n(n={len(data)})'
+                            for idx, data in enumerate(data_by_rep)])
         ax.set_ylabel(metric_labels[metric], fontsize=11, fontweight='bold')
         ax.set_title(metric_labels[metric], fontsize=12, fontweight='bold', pad=10)
         ax.spines['top'].set_visible(False)
@@ -245,8 +261,8 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
         fig.delaxes(axes[idx])
 
     plt.tight_layout()
-    plt.savefig(f'{output_prefix}_all_metrics.png', dpi=300, bbox_inches='tight')
-    plt.savefig(f'{output_prefix}_all_metrics.svg', format='svg', bbox_inches='tight')
+    plt.savefig(f'{output_prefix}_all_metrics_boxplots.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'{output_prefix}_all_metrics_boxplots.svg', format='svg', bbox_inches='tight')
     plt.close()
 
     key_metrics = [
@@ -264,52 +280,30 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
     for idx, metric in enumerate(key_metrics):
         ax = axes2[idx]
 
-        data1 = rep1[metric].dropna()
-        data2 = rep2[metric].dropna()
+        data_by_rep = [rep[metric].dropna() for rep in replicates]
 
-        means = [data1.mean(), data2.mean()]
-        sems = [data1.sem(), data2.sem()]
-
-        row = results_df[results_df['Metric'] == metric_labels[metric]].iloc[0]
-        p_val = row['p_value']
-        sig = row['Significance']
-
-        x_pos = [0, 1]
-        bars = ax.bar(x_pos, means, yerr=sems, capsize=8,
-                      color=colors, alpha=0.8, edgecolor='black', linewidth=2)
+        x_pos = np.arange(1, n_reps + 1)
+        bp = ax.boxplot(
+            data_by_rep,
+            positions=x_pos,
+            widths=0.6,
+            patch_artist=True,
+            showfliers=False
+        )
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.6)
+            patch.set_edgecolor('black')
 
         np.random.seed(42)
-        x1_jitter = np.random.normal(0, 0.05, size=len(data1))
-        x2_jitter = np.random.normal(1, 0.05, size=len(data2))
-
-        ax.scatter(x1_jitter, data1, alpha=0.5, s=50, color='darkblue',
-                   zorder=3, edgecolors='black', linewidth=0.5)
-        ax.scatter(x2_jitter, data2, alpha=0.5, s=50, color='darkred',
-                   zorder=3, edgecolors='black', linewidth=0.5)
-
-        y_max = max(means[0] + sems[0], means[1] + sems[1])
-        y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
-        bracket_height = y_max + 0.12 * y_range
-
-        if sig != 'ns':
-            ax.plot([0, 0, 1, 1],
-                    [bracket_height, bracket_height + 0.03 * y_range,
-                     bracket_height + 0.03 * y_range, bracket_height],
-                    'k-', linewidth=2)
-            ax.text(0.5, bracket_height + 0.05 * y_range, sig,
-                    ha='center', va='bottom', fontsize=14, fontweight='bold')
-
-        if p_val < 0.001:
-            p_text = 'p < 0.001'
-        else:
-            p_text = f'p = {p_val:.3f}'
-
-        ax.text(0.5, -0.18, p_text, ha='center', va='top',
-                transform=ax.transAxes, fontsize=11, style='italic', fontweight='bold')
+        for rep_idx, data in enumerate(data_by_rep):
+            x_jitter = np.random.normal(rep_idx + 1, 0.06, size=len(data))
+            ax.scatter(x_jitter, data, alpha=0.5, s=40, color='black',
+                       zorder=3, edgecolors='black', linewidth=0.5)
 
         ax.set_xticks(x_pos)
-        ax.set_xticklabels([f'Replicate 1\n(n={len(data1)})',
-                            f'Replicate 2\n(n={len(data2)})'],
+        ax.set_xticklabels([f'Replicate {idx + 1}\n(n={len(data)})'
+                            for idx, data in enumerate(data_by_rep)],
                            fontsize=11, fontweight='bold')
         ax.set_ylabel(metric_labels[metric], fontsize=12, fontweight='bold')
         ax.set_title(metric_labels[metric], fontsize=13, fontweight='bold', pad=15)
@@ -322,11 +316,52 @@ def create_comparison_plots(rep1: pd.DataFrame, rep2: pd.DataFrame,
     plt.savefig(f'{output_prefix}_key_metrics.svg', format='svg', bbox_inches='tight')
     plt.close()
 
+    fig3, axes3 = plt.subplots(2, 3, figsize=(16, 10))
+    axes3 = axes3.flatten()
+
+    for idx, metric in enumerate(key_metrics):
+        ax = axes3[idx]
+
+        data_by_rep = [rep[metric].dropna() for rep in replicates]
+
+        x_pos = np.arange(1, n_reps + 1)
+        bp = ax.boxplot(
+            data_by_rep,
+            positions=x_pos,
+            widths=0.6,
+            patch_artist=True,
+            showfliers=False
+        )
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.6)
+            patch.set_edgecolor('black')
+
+        np.random.seed(42)
+        for rep_idx, data in enumerate(data_by_rep):
+            x_jitter = np.random.normal(rep_idx + 1, 0.06, size=len(data))
+            ax.scatter(x_jitter, data, alpha=0.4, s=25, color='black', zorder=3)
+
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([f'Replicate {idx + 1}\n(n={len(data)})'
+                            for idx, data in enumerate(data_by_rep)],
+                           fontsize=11, fontweight='bold')
+        ax.set_ylabel(metric_labels[metric], fontsize=12, fontweight='bold')
+        ax.set_title(metric_labels[metric], fontsize=13, fontweight='bold', pad=15)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(axis='y', alpha=0.3, linestyle='--', linewidth=1)
+
+    plt.tight_layout()
+    plt.savefig(f'{output_prefix}_key_metrics_boxplots.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'{output_prefix}_key_metrics_boxplots.svg', format='svg', bbox_inches='tight')
+    plt.close()
+
 
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
-        description="Compare mitochondrial form factor between two replicates",
+        description="Compare mitochondrial form factor between two or three replicates",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example (with GUI):
@@ -336,6 +371,7 @@ Example (with CLI):
   python compare_form_factor_replicates.py \\
     --rep1 Rep1_mitochondria_summary_simple.csv \\
     --rep2 Rep2_mitochondria_summary_simple.csv \\
+    --rep3 Rep3_mitochondria_summary_simple.csv \\
     --out results/form_factor_comparison
         """
     )
@@ -343,6 +379,8 @@ Example (with CLI):
                         help="Path to replicate 1 CSV file (optional, will use GUI if not provided)")
     parser.add_argument("--rep2",
                         help="Path to replicate 2 CSV file (optional, will use GUI if not provided)")
+    parser.add_argument("--rep3",
+                        help="Path to replicate 3 CSV file (optional)")
     parser.add_argument("--out",
                         help="Output prefix (optional, will use GUI if not provided)")
 
@@ -350,11 +388,12 @@ Example (with CLI):
 
     # Get file paths from CLI or GUI picker
     if args.rep1 and args.rep2 and args.out:
-        rep1_path = args.rep1
-        rep2_path = args.rep2
+        rep_paths = [args.rep1, args.rep2]
+        if args.rep3:
+            rep_paths.append(args.rep3)
         out_path = args.out
     else:
-        rep1_path, rep2_path, out_path = pick_files_if_needed(args)
+        rep_paths, out_path = pick_files_if_needed(args)
 
     out_dir = Path(out_path).parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -363,15 +402,15 @@ Example (with CLI):
     print("MITOCHONDRIAL FORM FACTOR REPLICATE COMPARISON")
     print("=" * 100)
 
-    print(f"\nReplicate 1: {Path(rep1_path).name}")
-    print(f"Replicate 2: {Path(rep2_path).name}")
+    for idx, rep_path in enumerate(rep_paths, start=1):
+        print(f"\nReplicate {idx}: {Path(rep_path).name}")
     print(f"Output prefix: {out_path}\n")
 
     print("Loading replicates...")
-    rep1, rep2, combined = load_replicates(rep1_path, rep2_path)
+    replicates, combined = load_replicates(rep_paths)
 
-    print(f"Replicate 1: n={len(rep1)} cells")
-    print(f"Replicate 2: n={len(rep2)} cells")
+    for idx, rep in enumerate(replicates, start=1):
+        print(f"Replicate {idx}: n={len(rep)} cells")
     print(f"Total: n={len(combined)} cells\n")
 
     metrics = [
@@ -387,46 +426,40 @@ Example (with CLI):
         'circularity_std'
     ]
 
-    metric_labels = {
-        'organelle_area_raw_count': 'Number of Mitochondria per Cell',
-        'organelle_area_raw_mean': 'Mean Mitochondrial Area',
-        'organelle_area_raw_std': 'SD of Mitochondrial Area',
-        'form_factor_mean': 'Mean Form Factor',
-        'form_factor_std': 'SD of Form Factor',
-        'form_factor_median': 'Median Form Factor',
-        'aspect_ratio_calc_mean': 'Mean Aspect Ratio',
-        'aspect_ratio_calc_std': 'SD of Aspect Ratio',
-        'circularity_mean': 'Mean Circularity',
-        'circularity_std': 'SD of Circularity'
-    }
-
     print("Performing statistical tests...")
-    results_df = perform_statistical_tests(rep1, rep2, metrics)
+    results_df = perform_statistical_tests(replicates, metrics)
 
     results_path = f"{out_path}_statistics.csv"
     results_df.to_csv(results_path, index=False)
-    print(f"✓ Statistical results saved: {results_path}\n")
+    print(f"Statistical results saved: {results_path}\n")
 
     print("=" * 100)
     print("STATISTICAL COMPARISON SUMMARY")
     print("=" * 100)
     for _, row in results_df.iterrows():
         print(f"\n{row['Metric']}:")
-        print(f"  Replicate 1: {row['Rep1_mean']:.3f} ± {row['Rep1_SEM']:.3f} (n={row['Rep1_n']})")
-        print(f"  Replicate 2: {row['Rep2_mean']:.3f} ± {row['Rep2_SEM']:.3f} (n={row['Rep2_n']})")
-        print(f"  {row['Test']}: p = {row['p_value']:.4f} {row['Significance']}")
+        for idx in range(len(replicates)):
+            mean = row.get(f"Rep{idx + 1}_mean")
+            sem = row.get(f"Rep{idx + 1}_SEM")
+            n_val = row.get(f"Rep{idx + 1}_n")
+            mean_text = "nan" if pd.isna(mean) else f"{mean:.3f}"
+            sem_text = "nan" if pd.isna(sem) else f"{sem:.3f}"
+            n_text = "0" if pd.isna(n_val) else f"{int(n_val)}"
+            print(f"  Replicate {idx + 1}: {mean_text} +/- {sem_text} (n={n_text})")
+        p_text = "n/a" if pd.isna(row['p_value']) else f"{row['p_value']:.4f}"
+        print(f"  {row['Test']}: p = {p_text} {row['Significance']}")
 
     print("\n" + "=" * 100)
     print("Significance: *** p<0.001, ** p<0.01, * p<0.05, ns = not significant")
     print("=" * 100 + "\n")
 
     print("Creating visualizations...")
-    create_comparison_plots(rep1, rep2, results_df, metrics, metric_labels, out_path)
-    print(f"✓ Plots saved: {out_path}_all_metrics.[png/svg]")
-    print(f"✓ Plots saved: {out_path}_key_metrics.[png/svg]")
+    create_comparison_plots(replicates, metrics, METRIC_LABELS, out_path)
+    print(f"Plots saved: {out_path}_all_metrics_boxplots.[png/svg]")
+    print(f"Plots saved: {out_path}_key_metrics_boxplots.[png/svg]")
 
     print("\n" + "=" * 100)
-    print("✓ Analysis complete!")
+    print("Analysis complete!")
     print("=" * 100)
 
 
