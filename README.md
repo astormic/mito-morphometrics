@@ -1,37 +1,67 @@
 # mito-morphometrics
 
-A Python toolkit for batch processing and statistical analysis of mitochondrial morphology data from [Nellie](https://github.com/aelefebv/nellie) segmentation outputs.
+A modular Python pipeline for statistical evaluation and visualization of cell-level mitochondrial mass from [Nellie](https://github.com/aeleftherios/nellie) segmentation outputs.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ## Overview
 
-This tool processes Nellie's `features_organelles.csv` files to compute comprehensive cell-level mitochondrial metrics including size distributions, shape descriptors, and network properties. It automates the analysis of multiple samples and provides publication-ready statistical comparisons between experimental groups.
+This repository hosts the custom downstream pipeline used to parse, clean, and statistically evaluate cellular mitochondrial mass metrics generated via Nellie's structural characterization. It automates replicate pooling, tests statistical assumptions dynamically, and outputs publication-grade vector graphics.
 
-## Features
+---
 
-- **Batch Processing**: Automatically processes all CSV files in a directory
-- **Comprehensive Metrics**: Calculates 15+ morphological parameters including:
-  - **Basic metrics**: mitochondrial count, total/mean/median area, length distributions
-  - **Shape descriptors**: solidity, extent, aspect ratio
-  - **Network properties**: fragmentation index, tubularity score, network dominance, shape heterogeneity
-- **Statistical Analysis**: Automated replicate comparison with appropriate statistical tests
-  - Shapiro-Wilk normality testing
-  - Welch's t-test for normally distributed data
-  - Mann-Whitney U test for non-parametric data
-- **Visualisation**: Publication-ready bar plots with significance indicators
-- **Multiple Output Formats**: PNG and SVG for figures, CSV for data
+## Analysis Pipeline Workflow
 
-## Installation
+Whether comparing across different species or distinct tissues, the script engine handles biological data using a structured 4-step sequence:
+
+### 1. Data Ingestion & Sanitization
+* Automated extraction of the **`total_mito_area_raw`** ($\mu\text{m}^2$) metric from individual `features_organelles.csv` datasets.
+* Filters out tracking artifacts and segmentation anomalies by executing a `.dropna()` purge over raw structural metrics.
+
+### 2. Biological Replicate Pooling
+* Groups uneven biological cohorts into descriptive target arrays. 
+* Treats multiple technical assemblies (distinct explant cultures) originating from the same animal source as a single combined biological pool.
+
+### 3. Dynamic Statistical Core
+The program avoids arbitrary test selections by checking data distributions in real-time:
+* **Normality Testing:** Evaluated using the Shapiro-Wilk test (`scipy.stats.shapiro`).
+* **Variance Homogeneity:** Evaluated using Levene's test (`scipy.stats.levene`).
+
+Based on the parameters above, the pipeline dynamically routes the analysis along one of three paths:
+* **Path A:** Student's $t$-test (Normal distribution + Equal variance)
+* **Path B:** Welch's $t$-test (Normal distribution + Unequal variance)
+* **Path C:** Two-sided Mann-Whitney $U$ test (Non-parametric distribution)
+
+*Standardized effect sizes for all outcomes are quantified via **Cohen's d**.*
+
+### 4. Graphic Visualization
+Outputs fully compiled, high-DPI `.svg` layout formats featuring:
+* Master boxplots marking structural bounds and media.
+* Jittered, color-coded scatter layers plotting exact cell coordinate distributions.
+
+---
+
+## Repository Files & Configuration
+
+The toolkit is broken into specialized, standalone processing tracks:
+
+| Script File | Purpose / Comparison | Biological Grouping Size | Target Output Image |
+| :--- | :--- | :--- | :--- |
+| **`mito_comparison_fin.py`** | **Species variation** in fin-tissue | *H. antarcticus* (3 reps) vs. *L. pholis* (2 reps) | `mito_fin_boxplot_2RepLpholis.svg` |
+| **`mito_comparison_skin.py`** | **Species variation** in skin-tissue | *H. antarcticus* (3 reps) vs. *L. pholis* (1 pooled dataset) | `Skin_comparison_total_mass_.svg` |
+| **`mito_comparison_tissues.py`** | **Tissue variation** within a single species | Fin Cohort vs. Skin Cohort (*H. antarcticus*) | `Harpagifer_tissue_comparison.svg` |
+
+---
+
+## Replication Guide
 
 ### Requirements
-
-- Python 3.7 or higher
-- Required packages:
-  ```bash
-  pip install numpy pandas scipy matplotlib seaborn
-  ```
+Ensure your workspace includes Python 3.8+ along with these essential math and graphing libraries:
+```bash
+pip install numpy pandas scipy matplotlib
+```
+or
 
 ### Quick Setup
 
@@ -49,90 +79,19 @@ chmod +x scripts/*.py
 
 ## Usage
 
-### 1. Batch Analysis
-
-Process multiple Nellie output CSV files at once:
-
-**Interactive GUI mode:**
+### Execute Fin comparison between species
 ```bash
-python scripts/batch_analyse.py
+python mito_comparison_fin.py
 ```
 
-**Command line mode:**
+### Execute Skin comparison between species
 ```bash
-python scripts/batch_analyse.py --in /path/to/nellie/csvs --out /path/to/output
+python mito_comparison_skin.py
 ```
 
-**Recursive search in subdirectories:**
+### Execute Tissue comparison (Fin vs. Skin)
 ```bash
-python scripts/batch_analyse.py --in /path/to/data --out /path/to/output --recursive
-```
-
-**Output:**
-- Individual `*_cell_metrics.csv` files for each input
-- `combined_cell_metrics.csv` with all results
-
-### 2. Statistical Comparison
-
-Compare two experimental replicates or conditions:
-
-```bash
-python scripts/compare_replicates.py \
-  --rep1 replicate1_combined.csv \
-  --rep2 replicate2_combined.csv \
-  --out results/comparison
-```
-
-**Output:**
-- `comparison_statistics.csv` - detailed statistical results
-- `comparison_all_metrics.png/svg` - comprehensive bar plots
-- `comparison_key_metrics.png/svg` - focused visualisation of key parameters
-
-## Input Format
-
-Expects CSV files from Nellie with the following columns:
-- `organelle_area_raw`
-- `organelle_axis_length_maj_raw`
-- `organelle_axis_length_min_raw`
-- `organelle_extent_raw`
-- `organelle_solidity_raw`
-
-## Output Metrics
-
-### Basic Morphology
-- `n_mitochondria` - Total number of detected mitochondria
-- `total_mito_area_raw` - Sum of all mitochondrial areas
-- `mean_mito_area_raw` - Average mitochondrial area
-- `median_mito_area_raw` - Median mitochondrial area
-- `sd_mito_area_raw` - Standard deviation of area
-
-### Length Metrics
-- `mean_mito_length_raw` - Average major axis length
-- `max_mito_length_raw` - Maximum length (longest mitochondrion)
-- `sd_mito_length_raw` - Standard deviation of length
-
-### Shape Descriptors
-- `mean_solidity` - Compactness measure (area/convex hull area)
-- `mean_extent` - Proportion of bounding box filled
-- `mean_aspect_ratio` - Elongation measure (major/minor axis)
-
-### Network Properties
-- `fragmentation_index` - Mitochondrial count normalised to total area (higher = more fragmented)
-- `network_dominance_index` - Maximum length relative to mean (higher = less uniform network)
-- `shape_heterogeneity_index` - Coefficient of variation of length (higher = more variable shapes)
-- `tubularity_score` - Composite measure: aspect_ratio × (1 - solidity) (higher = more tubular)
-
-## Example Workflow
-
-```bash
-# 1. Process Nellie outputs for all your samples
-python scripts/batch_analyse.py --in ./raw_data --out ./processed
-
-# 2. Compare experimental groups
-python scripts/compare_replicates.py \
-  --rep1 ./processed/control_combined.csv \
-  --rep2 ./processed/treatment_combined.csv \
-  --out ./results/control_vs_treatment
+python mito_comparison_tissues.py
 ```
 
 ## Citation
@@ -144,7 +103,6 @@ If you use this tool in your research, please cite:
 
 **This tool:**
 > Rahmani. A., (2026). mito-morphometrics: Batch analysis toolkit for mitochondrial morphology. GitHub: https://github.com/astormic/mito-morphometrics
-> Preprint is coming soon!
 
 ## License
 
@@ -152,7 +110,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-This tool processes data generated by [Nellie](https://github.com/aeleftherios/nellie). We are grateful to the Nellie developers for their excellent open-source segmentation tool.
+This tool processes data generated by [Nellie](https://github.com/aeleftherios/nellie).
 
 ## Contributing
 
@@ -163,7 +121,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any issues or have questions:
 1. Check the [documentation](docs/)
 2. Open an [issue](https://github.com/yourusername/mito-morphometrics/issues)
-3. Contact: [your email]
+3. Contact: [email]
 
 ## Roadmap
 
