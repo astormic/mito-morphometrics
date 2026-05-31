@@ -98,11 +98,11 @@ python mito_comparison_tissues.py
 
 If you use this tool in your research, please cite:
 
+**This Study & Pipeline Implementation:**
+>  van Tartwijk F., et al., Antarctic fish cell cultures show adaptation of organelle morphology and dynamics to extreme cold, bioRXiv, (2026). DOI: https://doi.org/10.64898/2026.04.24.720652 
+
 **Nellie:**
 > Lefebvre, A.E.Y.T., Sturm, G., Lin, TY. et al. Nellie: automated organelle segmentation, tracking and hierarchical feature extraction in 2D/3D live-cell microscopy. Nat Methods 22, 751–763 (2025). https://doi.org/10.1038/s41592-025-02612-7
-
-**This tool:**
-> Rahmani. A., (2026). mito-morphometrics: Batch analysis toolkit for mitochondrial morphology. GitHub: https://github.com/astormic/mito-morphometrics
 
 ## License
 
